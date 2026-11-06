@@ -9,4 +9,4 @@ persona pega una vez en «Conexión» (se queda solo en su navegador).
 - `index.html`: el editor. El original está en `agente-creador-contenido/editor/editor.html`; esta es una copia.
 - `manifest.webmanifest`, `sw.js`, `icono*`: para poder instalarlo como aplicación (Chrome o Edge: menú → «Instalar»).
 
-_Publicado con GitHub Pages desde la rama `main`._
+_Publicado con GitHub Pages desde la rama `main` (https://adrisoler21.github.io/editor-adrineitor/)._
