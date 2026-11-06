@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de vídeo · Mira por dónde pisas</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<meta name="theme-color" content="#c8362b">
+<style>
+  :root {
+    --fondo: #f4f1ea; --panel: #ffffff; --tinta: #1e1e1e; --suave: #6b665c; --borde: #ddd6c8;
+    --acento: #c8362b; --amarillo: #ffc928; --ok: #2f7d4f; --aviso: #b26a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --fondo: #1b1a18; --panel: #262421; --tinta: #f1ede4; --suave: #a59f92; --borde: #3a3732; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fondo); color: var(--tinta); }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--borde); background: var(--panel); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; }
+  header h1 span { color: var(--acento); }
+  .espacio { flex: 1; }
+  button { font: inherit; border: 1px solid var(--borde); background: var(--panel); color: var(--tinta); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button.principal { background: var(--acento); border-color: var(--acento); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  input, select, textarea { font: inherit; color: var(--tinta); background: var(--fondo); border: 1px solid var(--borde); border-radius: 6px; padding: 5px 7px; width: 100%; }
+  textarea { resize: vertical; min-height: 54px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 440px); gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } #visor { position: static !important; } }
+  #visor { position: sticky; top: 64px; align-self: start; background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; order: 2; }
+  #lista { order: 1; display: flex; flex-direction: column; gap: 10px; }
+  canvas { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 8px; display: block; }
+  .controles { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .controles input[type=range] { flex: 1; }
+  .tiempo { font-variant-numeric: tabular-nums; color: var(--suave); font-size: 13px; min-width: 92px; text-align: right; }
+  .bloque { font-weight: 700; margin: 14px 0 2px; color: var(--suave); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  .plano { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 12px; background: var(--panel); border: 1px solid var(--borde); border-radius: 10px; padding: 10px; }
+  .plano.activo { outline: 2px solid var(--acento); }
+  .plano.cambiado { border-left: 5px solid var(--amarillo); }
+  @media (max-width: 560px) { .plano { grid-template-columns: 1fr; } }
+  .mini { width: 160px; aspect-ratio: 16/9; background: #000 center/cover no-repeat; border-radius: 6px; position: relative; cursor: pointer; }
+  @media (max-width: 560px) { .mini { width: 100%; } }
+  .mini .dur { position: absolute; right: 4px; bottom: 4px; background: rgba(0,0,0,.7); color: #fff; font-size: 11px; padding: 1px 5px; border-radius: 4px; }
+  .mini .play { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 28px; text-shadow: 0 1px 4px #000; opacity: .85; }
+  .cab { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .cab b { font-size: 14px; }
+  .cab .t { color: var(--suave); font-size: 12px; }
+  .etiqueta { font-size: 11px; padding: 1px 6px; border-radius: 10px; background: var(--fondo); border: 1px solid var(--borde); color: var(--suave); }
+  .etiqueta.voz { background: var(--amarillo); color: #1e1e1e; border-color: var(--amarillo); }
+  .probar { font-size: 12px; padding: 2px 8px; }
+  .campos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin-top: 6px; }
+  .campos label { font-size: 12px; color: var(--suave); display: flex; flex-direction: column; gap: 2px; }
+  .campos .ancho { grid-column: 1 / -1; }
+  .fijo { color: var(--suave); font-size: 13px; font-style: italic; margin-top: 4px; }
+  dialog { border: 1px solid var(--borde); border-radius: 12px; background: var(--panel); color: var(--tinta); max-width: 560px; width: calc(100% - 32px); }
+  dialog label { display: block; margin: 8px 0; font-size: 13px; color: var(--suave); }
+  .nota { font-size: 13px; color: var(--suave); }
+  #estado { font-size: 13px; color: var(--suave); margin-top: 10px; white-space: pre-line; }
+  #estado a { color: var(--acento); }
+  .resumen { font-size: 13px; margin-top: 10px; }
+  .resumen li { margin: 2px 0; }
+  code { background: var(--fondo); padding: 0 4px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Editor · <span>Mira por dónde pisas</span></h1>
+  <span class="nota" id="donde"></span>
+  <span class="espacio"></span>
+  <button id="bConfig">Conexión</button>
+  <button id="bRecargar">Recargar</button>
+  <button class="principal" id="bGuardar" disabled>Guardar y montar</button>
+</header>
+
+<main>
+  <section id="lista"><p class="nota">Cargando…</p></section>
+  <aside id="visor">
+    <canvas id="lienzo" width="960" height="540"></canvas>
+    <div class="controles">
+      <button id="bPlay">▶</button>
+      <input type="range" id="barra" min="0" max="1" step="0.05" value="0">
+      <span class="tiempo" id="reloj">0:00 / 0:00</span>
+    </div>
+    <p class="nota">Vista previa aproximada: el vídeo final lo monta GitHub con la misma lista de planos. Si cambias un texto, pulsa <b>🔊 Probar voz</b> para oír solo esa frase (gasta solo lo que mide la frase); al guardar se usa esa misma grabación.</p>
+    <div class="resumen" id="resumen"></div>
+    <div id="estado"></div>
+  </aside>
+</main>
+
+<dialog id="dConfig">
+  <form method="dialog">
+    <h3 style="margin-top:0">Conexión con GitHub</h3>
+    <p class="nota">El editor lee y guarda los planos directamente en tu repositorio. Necesita un <b>token</b> de GitHub con permiso solo para este repositorio:
+      GitHub → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token → Repository access: <i>Only select repositories</i> (este) → Permissions: <b>Contents: Read and write</b> y <b>Actions: Read-only</b>.
+      El token se guarda solo en este navegador.</p>
+    <label>Usuario / repositorio <input id="cRepo" placeholder="AdriSoler21/agente-creador-contenido"></label>
+    <label>Rama <input id="cRama" placeholder="claude/trusting-heisenberg-gjzzbe"></label>
+    <label>Lugar <input id="cLugar" placeholder="colindres"></label>
+    <label>Token <input id="cToken" type="password" placeholder="github_pat_…"></label>
+    <label>Clave de ElevenLabs (opcional: si la dejas vacía, «Probar voz» la hace GitHub con su secreto y tarda ~1 min; empieza por <code>sk_</code>) <input id="cEleven" type="password" placeholder="sk_…"></label>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px">
+      <button value="cancel">Cancelar</button>
+      <button value="ok" class="principal">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<input type="file" id="fImagen" accept="image/png,image/jpeg,image/webp" hidden>
+
+<script>
+"use strict";
+// ---------- configuración ----------
+const DEF = { repo: "AdriSoler21/agente-creador-contenido", rama: "claude/trusting-heisenberg-gjzzbe", lugar: "colindres", token: "", eleven: "" };
+const LOCAL = new URLSearchParams(location.search).has("local");   // pruebas: lee los archivos del propio repositorio servido en local
+function leerConfig() { try { return { ...DEF, ...JSON.parse(localStorage.getItem("editor_cfg") || "{}") }; } catch { return { ...DEF }; } }
+function guardarConfig(c) { try { localStorage.setItem("editor_cfg", JSON.stringify(c)); } catch {} }
+let cfg = leerConfig();
+
+// ---------- acceso a GitHub ----------
+const ruta = p => p.split("/").map(encodeURIComponent).join("/");
+async function gh(url, opciones = {}) {
+  const r = await fetch("https://api.github.com" + url, { ...opciones, headers: {
+    "Accept": "application/vnd.github+json", "Authorization": "Bearer " + cfg.token,
+    "X-GitHub-Api-Version": "2022-11-28", ...(opciones.headers || {}) } });
+  if (!r.ok) throw new Error(`GitHub respondió ${r.status} en ${url}: ${(await r.text()).slice(0, 200)}`);
+  return r;
+}
+async function leerCrudo(p) {   // bytes de un archivo del repositorio
+  if (LOCAL) { const r = await fetch("../" + ruta(p)); if (!r.ok) throw new Error("No encuentro " + p); return r; }
+  return gh(`/repos/${cfg.repo}/contents/${ruta(p)}?ref=${encodeURIComponent(cfg.rama)}`, { headers: { Accept: "application/vnd.github.raw+json" } });
+}
+async function leerJSON(p) { return (await leerCrudo(p)).json(); }
+async function shaDe(p) {
+  const r = await gh(`/repos/${cfg.repo}/contents/${ruta(p)}?ref=${encodeURIComponent(cfg.rama)}`);
+  return (await r.json()).sha;
+}
+function aBase64(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
+async function escribir(p, bytes, mensaje) {
+  let sha; try { sha = await shaDe(p); } catch { sha = undefined; }
+  const r = await gh(`/repos/${cfg.repo}/contents/${ruta(p)}`, { method: "PUT", body: JSON.stringify({
+    message: mensaje, content: aBase64(bytes), branch: cfg.rama, ...(sha ? { sha } : {}) }) });
+  return (await r.json()).commit.sha;
+}
+
+// ---------- medios (imágenes, clips, audio) ----------
+const urls = {}, imgs = {}, videos = {}, buffers = {};
+async function urlDe(p) { if (!urls[p]) urls[p] = (async () => URL.createObjectURL(await (await leerCrudo(p)).blob()))(); return urls[p]; }
+async function imagen(p) {
+  if (!imgs[p]) imgs[p] = (async () => { const i = new Image(); i.src = await urlDe(p); await i.decode(); return i; })();
+  return imgs[p];
+}
+async function video(p) {
+  if (!videos[p]) videos[p] = (async () => { const v = document.createElement("video"); v.muted = true; v.preload = "auto"; v.src = await urlDe(p); v.playsInline = true; await new Promise(ok => { v.onloadeddata = ok; v.onerror = ok; }); return v; })();
+  return videos[p];
+}
+let actx;
+async function buffer(p) {
+  actx = actx || new AudioContext();
+  if (!buffers[p]) buffers[p] = (async () => actx.decodeAudioData(await (await leerCrudo(p)).arrayBuffer()))();
+  return buffers[p];
+}
+
+// ---------- datos ----------
+let planosJSON, original, linea, cartelImg = {};
+const RUTA_PLANOS = () => `fichas/${cfg.lugar}/largo/planos.json`;
+function editables() { const m = {}; planosJSON.bloques.forEach(b => b.planos.forEach(p => m[p.id] = p)); return m; }
+
+async function cargar() {
+  document.getElementById("donde").textContent = LOCAL ? "modo local (pruebas)" : `${cfg.repo} · ${cfg.rama} · ${cfg.lugar}`;
+  if (!LOCAL && !cfg.token) { document.getElementById("lista").innerHTML = '<p class="nota">Pulsa <b>Conexión</b> y pega tu token de GitHub para empezar.</p>'; return; }
+  const lista = document.getElementById("lista");
+  lista.innerHTML = '<p class="nota">Cargando los planos…</p>';
+  try {
+    planosJSON = await leerJSON(RUTA_PLANOS());
+    original = JSON.parse(JSON.stringify(planosJSON));
+    linea = await leerJSON(`fichas/${cfg.lugar}/largo/linea.json`);
+  } catch (e) { lista.innerHTML = `<p class="nota">No he podido leer los planos: ${e.message}</p>`; return; }
+  for (const t of ["LEYENDA", "SIN CONFIRMAR"]) imagen(`produccion/marca/carteles/${t.toLowerCase().replace(/[^a-z0-9]/g, "")}.png`).then(i => cartelImg[t] = i).catch(() => {});
+  document.getElementById("barra").max = linea.total;
+  pintarLista(); actualizarResumen(); dibujar(0);
+  await recuperarBorrador();
+}
+
+// ---------- la lista de planos ----------
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+const MOVS = { zoom: "Acercamiento suave", "zoom-rango": "Acercamiento (continúa)", foco: "Acercarse a un punto", paneo: "Paneo lateral" };
+function movTipo(m) { if (!m || m === "zoom") return "zoom"; if (m.zoom) return "zoom-rango"; if (m.foco) return "foco"; if (m.paneo) return "paneo"; return "zoom"; }
+
+function pintarLista() {
+  const lista = document.getElementById("lista"), ed = editables();
+  lista.innerHTML = "";
+  let bloqueAnt = null;
+  linea.planos.forEach((lp, i) => {
+    const p = ed[lp.id];
+    const nombreBloque = lp.bloque ? (planosJSON.bloques.find(b => b.id === lp.bloque) || {}).titulo : null;
+    const clave = lp.bloque || lp.id;
+    if (clave !== bloqueAnt && (lp.bloque || !lp.id.startsWith("T-"))) {
+      const h = document.createElement("div"); h.className = "bloque";
+      h.textContent = lp.bloque ? `${lp.bloque} · ${nombreBloque || ""}` : ({ INTRO: "Intro del canal", TIT: "Título", FINAL: "Cierre" }[lp.id] || lp.id);
+      lista.appendChild(h); bloqueAnt = clave;
+    }
+    if (lp.tipo === "negro") return;
+    const tarjeta = document.createElement("div"); tarjeta.className = "plano"; tarjeta.id = "p_" + lp.id;
+    const mini = document.createElement("div"); mini.className = "mini";
+    mini.innerHTML = `<span class="play">▶</span><span class="dur">${(lp.fin - lp.ini).toFixed(1)} s</span>`;
+    mini.onclick = () => reproducir(lp.ini);
+    if (lp.fuente && lp.tipo === "imagen") urlDe(lp.fuente).then(u => mini.style.backgroundImage = `url("${u}")`).catch(() => {});
+    if (lp.tipo === "clip") mini.style.background = "#333";
+    const cuerpo = document.createElement("div");
+    const tipo = lp.tipo === "clip" ? "clip animado" : "imagen";
+    cuerpo.innerHTML = `<div class="cab"><b>${lp.id}</b><span class="t">${fmt(lp.ini)}</span><span class="etiqueta">${tipo}</span>${lp.aviso ? `<span class="etiqueta">⚠ ${lp.aviso}</span>` : ""}<span class="etiqueta voz" hidden>voz nueva al montar</span><button type="button" class="probar" hidden>🔊 Probar voz</button></div>`;
+    if (p) { cuerpo.appendChild(campos(p, lp, tarjeta)); cuerpo.querySelector(".probar").onclick = e => probarVoz(p, e.target); }
+    else cuerpo.insertAdjacentHTML("beforeend", `<div class="fijo">${lp.titulo || lp.texto || "Pieza fija del canal (se edita aparte)"}</div>`);
+    tarjeta.append(mini, cuerpo); lista.appendChild(tarjeta);
+    marcarCambios(lp.id);
+  });
+}
+
+function campos(p, lp, tarjeta) {
+  const c = document.createElement("div"); c.className = "campos";
+  c.innerHTML = `
+    <label class="ancho">Texto del narrador <textarea data-k="texto"></textarea></label>
+    <label>Rótulo (arriba) <input data-k="rotulo" placeholder="(ninguno)"></label>
+    <label>Cartel «Pisa con cuidado» <select data-k="aviso"><option value="">(ninguno)</option><option>LEYENDA</option><option>SIN CONFIRMAR</option></select></label>
+    ${lp.tipo === "imagen" ? `<label>Movimiento de cámara <select data-k="mov">${Object.entries(MOVS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select></label>
+    <label>Punto / recorrido (0 = izquierda, 1 = derecha) <input data-k="movv" placeholder="p. ej. 0.5"></label>
+    <label class="ancho">Imagen <span style="display:flex; gap:6px"><input data-k="fuente" readonly><button type="button" data-k="subir">Cambiar…</button></span></label>` : ""}`;
+  const $ = k => c.querySelector(`[data-k="${k}"]`);
+  $("texto").value = p.texto || ""; $("rotulo").value = p.rotulo || ""; $("aviso").value = p.aviso || "";
+  $("texto").oninput = e => { p.texto = e.target.value; cambio(p.id); };
+  $("rotulo").oninput = e => { if (e.target.value) p.rotulo = e.target.value; else delete p.rotulo; cambio(p.id); };
+  $("aviso").onchange = e => { if (e.target.value) p.aviso = e.target.value; else delete p.aviso; cambio(p.id); };
+  if (lp.tipo === "imagen") {
+    const t = movTipo(p.mov); $("mov").value = t;
+    $("movv").value = t === "foco" ? p.mov.foco.join(", ") : t === "paneo" ? p.mov.paneo.join(", ") : t === "zoom-rango" ? p.mov.zoom.join(", ") : "";
+    const aplicarMov = () => {
+      const tipo = $("mov").value, v = $("movv").value.split(",").map(Number).filter(n => !isNaN(n));
+      if (tipo === "zoom") p.mov = "zoom";
+      else if (tipo === "foco") p.mov = { foco: [v[0] ?? 0.5, v[1] ?? 0.5] };
+      else if (tipo === "paneo") p.mov = { paneo: [v[0] ?? 0.3, v[1] ?? 0.7] };
+      else p.mov = { zoom: [v[0] ?? 1.0, v[1] ?? 1.08] };
+      cambio(p.id);
+    };
+    $("mov").onchange = aplicarMov; $("movv").onchange = aplicarMov;
+    $("fuente").value = p._nueva ? p._nueva.nombre : lp.fuente;
+    $("subir").onclick = () => elegirImagen(p, $("fuente"));
+  }
+  return c;
+}
+
+function elegirImagen(p, campo) {
+  const f = document.getElementById("fImagen");
+  f.onchange = async () => {
+    const archivo = f.files[0]; if (!archivo) return;
+    const bytes = new Uint8Array(await archivo.arrayBuffer());
+    const ext = (archivo.name.split(".").pop() || "png").toLowerCase();
+    const destino = `produccion/${cfg.lugar}/ia/largo/${p.id}_${Date.now()}.${ext}`;
+    p._nueva = { nombre: archivo.name, destino, bytes };
+    const u = URL.createObjectURL(archivo); urls[destino] = Promise.resolve(u);
+    const lp = linea.planos.find(x => x.id === p.id); lp.fuente = destino;
+    campo.value = archivo.name; document.querySelector(`#p_${CSS.escape(p.id)} .mini`).style.backgroundImage = `url("${u}")`;
+    cambio(p.id); f.value = "";
+  };
+  f.click();
+}
+
+// ---------- cambios ----------
+function planoOriginal(id) { for (const b of original.bloques) for (const p of b.planos) if (p.id === id) return p; }
+function limpio(p) { const { _nueva, _voz, ...resto } = p; return resto; }
+function cambiado(id) { const p = editables()[id]; return p && (p._nueva || JSON.stringify(limpio(p)) !== JSON.stringify(planoOriginal(id))); }
+function marcarCambios(id) {
+  const t = document.getElementById("p_" + id); if (!t) return;
+  t.classList.toggle("cambiado", !!cambiado(id));
+  const p = editables()[id], o = planoOriginal(id);
+  const nuevaVoz = !!(p && o && p.texto !== o.texto), probada = !!(p && p._voz && p._voz.texto === p.texto);
+  t.querySelector(".etiqueta.voz").hidden = !nuevaVoz;
+  t.querySelector(".etiqueta.voz").textContent = probada ? "voz probada ✓ (se usará esta)" : "voz nueva al montar";
+  const b = t.querySelector(".probar"); if (b) b.hidden = !nuevaVoz;
+}
+function cambio(id) { marcarCambios(id); actualizarResumen(); guardarBorrador(); if (!reproduciendo) dibujar(tActual); }
+
+// ---------- borrador: los cambios sin guardar se guardan solos en este navegador ----------
+const CLAVE_BORRADOR = () => `editor_borrador_${cfg.repo}_${cfg.rama}_${cfg.lugar}`;
+let temporizadorBorrador;
+function escribirBorrador() {
+  if (!planosJSON) return;
+  const ed = editables(), cambios = {};
+  for (const id of Object.keys(ed).filter(cambiado)) {
+    const { _nueva, _voz, ...resto } = ed[id];
+    const voz = _voz && _voz.texto === resto.texto
+      ? { texto: _voz.texto, json: _voz.json, enRepositorio: !!_voz.enRepositorio, ...(_voz.enRepositorio ? {} : { mp3: aBase64(_voz.mp3) }) } : null;
+    cambios[id] = { plano: resto, ...(voz ? { voz } : {}), ...(_nueva ? { imagenSinSubir: _nueva.nombre } : {}) };
+  }
+  try {
+    if (Object.keys(cambios).length) localStorage.setItem(CLAVE_BORRADOR(), JSON.stringify({ fecha: Date.now(), cambios }));
+    else localStorage.removeItem(CLAVE_BORRADOR());
+  } catch {}
+}
+function guardarBorrador() { clearTimeout(temporizadorBorrador); temporizadorBorrador = setTimeout(escribirBorrador, 400); }
+async function recuperarBorrador() {
+  let b; try { b = JSON.parse(localStorage.getItem(CLAVE_BORRADOR()) || "null"); } catch { b = null; }
+  if (!b || !Object.keys(b.cambios || {}).length) return;
+  const ids = Object.keys(b.cambios), fecha = new Date(b.fecha).toLocaleString("es-ES");
+  const imagenes = ids.filter(i => b.cambios[i].imagenSinSubir);
+  const aviso = imagenes.length ? `\n(Las imágenes nuevas de ${imagenes.join(", ")} hay que volver a elegirlas.)` : "";
+  if (!confirm(`Tienes cambios sin guardar del ${fecha} en: ${ids.join(", ")}.\n¿Recuperarlos?${aviso}`)) {
+    try { localStorage.removeItem(CLAVE_BORRADOR()); } catch {}
+    return;
+  }
+  const ed = editables();
+  for (const id of ids) {
+    const p = ed[id]; if (!p) continue;
+    for (const k of Object.keys(p)) delete p[k];
+    Object.assign(p, b.cambios[id].plano);
+    const v = b.cambios[id].voz;   // la voz ya probada vuelve con el borrador (no se paga otra vez)
+    if (v) p._voz = { texto: v.texto, json: v.json, enRepositorio: v.enRepositorio,
+                      mp3: v.mp3 ? Uint8Array.from(atob(v.mp3), c => c.charCodeAt(0)) : null };
+    if (v && v.enRepositorio) leerCrudo(`fichas/${cfg.lugar}/largo/voz/frases/${id}.mp3`).then(r => r.arrayBuffer())
+      .then(a => { p._voz.mp3 = new Uint8Array(a); }).catch(() => {});
+  }
+  pintarLista(); actualizarResumen();
+}
+function actualizarResumen() {
+  const ids = Object.keys(editables()).filter(cambiado);
+  document.getElementById("bGuardar").disabled = !ids.length;
+  document.getElementById("resumen").innerHTML = ids.length
+    ? `<b>Cambios sin guardar (${ids.length}):</b><ul>${ids.map(i => `<li><a href="#p_${i}">${i}</a></li>`).join("")}</ul>` : "";
+}
+
+async function guardar() {
+  const ed = editables(), ids = Object.keys(ed).filter(cambiado);
+  if (!ids.length) return;
+  const estado = document.getElementById("estado"), boton = document.getElementById("bGuardar");
+  boton.disabled = true;
+  try {
+    for (const id of ids) {
+      const p = ed[id];
+      if (p._nueva) {
+        estado.textContent = `Subiendo la imagen nueva de ${id}…`;
+        if (!LOCAL) await escribir(p._nueva.destino, p._nueva.bytes, `Editor: imagen nueva para ${id}`);
+        if (p.img) { p.prompt_original = p.img; delete p.img; }
+        p.usa = p._nueva.destino; delete p._nueva;
+      }
+    }
+    for (const id of ids) {   // la voz probada se sube para que el montador la use (y no se pague dos veces)
+      const p = ed[id];
+      if (p._voz && p._voz.texto === p.texto && !p._voz.enRepositorio && !LOCAL) {
+        estado.textContent = `Subiendo la voz probada de ${id}…`;
+        const base = `fichas/${cfg.lugar}/largo/voz/frases/${id}`;
+        await escribir(base + ".mp3", p._voz.mp3, `Editor: voz probada de ${id}`);
+        await escribir(base + ".json", new TextEncoder().encode(JSON.stringify(p._voz.json, null, 1)), `Editor: tiempos de la voz de ${id}`);
+      }
+      delete p._voz;
+    }
+    const texto = JSON.stringify(planosJSON, null, 1);
+    estado.textContent = "Guardando los planos…";
+    if (LOCAL) { estado.textContent = "Modo local: no se guarda nada (prueba)."; return; }
+    const sha = await escribir(RUTA_PLANOS(), new TextEncoder().encode(texto), `Editor: cambios en ${ids.join(", ")}`);
+    original = JSON.parse(texto);
+    ids.forEach(marcarCambios); actualizarResumen();
+    try { localStorage.removeItem(CLAVE_BORRADOR()); } catch {}
+    estado.textContent = "Guardado. GitHub empieza a montar el vídeo…";
+    seguirMontaje(sha);
+  } catch (e) { estado.textContent = "No se ha podido guardar: " + e.message; boton.disabled = false; }
+}
+
+async function seguirMontaje(sha) {
+  const estado = document.getElementById("estado");
+  const inicio = Date.now();
+  const paso = async () => {
+    try {
+      const r = await (await gh(`/repos/${cfg.repo}/actions/runs?head_sha=${sha}&per_page=5`)).json();
+      const run = (r.workflow_runs || []).find(x => x.name === "Montar vídeo largo");
+      const min = Math.round((Date.now() - inicio) / 60000);
+      if (!run) { estado.textContent = `Esperando a que GitHub empiece… (${min} min)`; return setTimeout(paso, 15000); }
+      if (run.status !== "completed") {
+        estado.innerHTML = `Montando en GitHub (${run.status === "queued" ? "en cola" : "en marcha"}, ${min} min). <a href="${run.html_url}" target="_blank" rel="noopener">Ver en GitHub</a>`;
+        return setTimeout(paso, 20000);
+      }
+      estado.innerHTML = run.conclusion === "success"
+        ? `✅ Vídeo montado. <a href="${run.html_url}" target="_blank" rel="noopener">Descárgalo aquí</a> (abajo, en «Artifacts»). Pulsa <b>Recargar</b> para ver los tiempos nuevos.`
+        : `❌ El montaje ha fallado (${run.conclusion}). <a href="${run.html_url}" target="_blank" rel="noopener">Ver qué ha pasado</a>`;
+    } catch (e) { estado.textContent = "No puedo consultar el montaje: " + e.message; }
+  };
+  paso();
+}
+
+// ---------- probar voz (ElevenLabs, solo la frase) ----------
+// Mismos ajustes que maquina/voz/voz.py y maquina/montador/largo.py
+const VOZ = "HMCmDsbKeaSZp5LMOYKR", MODELO = "eleven_multilingual_v2", VELOCIDAD = 1.1, TEMPO = 1.07;
+const AJUSTES = { stability: 0.4, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true };
+const UNI = ["cero","uno","dos","tres","cuatro","cinco","seis","siete","ocho","nueve","diez","once","doce","trece","catorce","quince","dieciséis","diecisiete","dieciocho","diecinueve","veinte","veintiuno","veintidós","veintitrés","veinticuatro","veinticinco","veintiséis","veintisiete","veintiocho","veintinueve"];
+const DEC = {3:"treinta",4:"cuarenta",5:"cincuenta",6:"sesenta",7:"setenta",8:"ochenta",9:"noventa"};
+const CEN = {1:"ciento",2:"doscientos",3:"trescientos",4:"cuatrocientos",5:"quinientos",6:"seiscientos",7:"setecientos",8:"ochocientos",9:"novecientos"};
+function enPalabras(n, fem) {
+  if (n < 30) return UNI[n];
+  if (n < 100) { const d = Math.floor(n / 10), u = n % 10; return DEC[d] + (u ? " y " + UNI[u] : ""); }
+  if (n < 1000) { if (n === 100) return "cien"; const c = Math.floor(n / 100), r = n % 100; const cen = fem ? CEN[c].replace("ientos", "ientas") : CEN[c]; return cen + (r ? " " + enPalabras(r, fem) : ""); }
+  const m = Math.floor(n / 1000), r = n % 1000; return (m === 1 ? "mil" : enPalabras(m, fem) + " mil") + (r ? " " + enPalabras(r, fem) : "");
+}
+const ROMANOS = [[/\bsiglo X\b/g,"siglo diez"],[/\bsiglo XVI\b/g,"siglo dieciséis"],[/\bsiglo XVII\b/g,"siglo diecisiete"],[/\bsiglo XIX\b/g,"siglo diecinueve"],[/\bdel XIX\b/g,"del diecinueve"],[/\ben el XIX\b/g,"en el diecinueve"],[/\bEnrique III\b/g,"Enrique tercero"],[/\bFelipe III\b/g,"Felipe tercero"],[/\bFelipe II\b/g,"Felipe segundo"],[/\bCarlos V\b/g,"Carlos quinto"]];
+function lectura(texto) {   // cómo se lee en voz alta (como en el montador)
+  texto = texto.replace(/[«»]/g, "");
+  for (const [re, v] of ROMANOS) texto = texto.replace(re, v);
+  return texto.replace(/\b(\d{1,3}(?:\.\d{3})+|\d+)\b/g, (m, num, pos, todo) => {
+    const sig = todo.slice(pos + m.length, pos + m.length + 12).trim().toLowerCase();
+    return enPalabras(parseInt(num.replace(/\./g, ""), 10), sig.startsWith("tonelada") || sig.startsWith("cubierta"));
+  });
+}
+function vecinos(id) {
+  for (const b of planosJSON.bloques) { const i = b.planos.findIndex(p => p.id === id);
+    if (i >= 0) return [i ? lectura(b.planos[i - 1].texto) : null, i + 1 < b.planos.length ? lectura(b.planos[i + 1].texto) : null]; }
+  return [null, null];
+}
+async function probarVoz(p, boton) {
+  if (p._voz && p._voz.texto === p.texto) return sonar(p._voz.mp3);   // ya probada: se vuelve a oír sin pagar
+  if (!cfg.eleven) return probarVozGitHub(p, boton);                 // sin clave aquí: la graba GitHub con el secreto
+  const texto = lectura(p.texto), [antes, despues] = vecinos(p.id);
+  boton.disabled = true; boton.textContent = "Grabando…";
+  try {
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOZ}/with-timestamps`, { method: "POST",
+      headers: { "xi-api-key": cfg.eleven, "Content-Type": "application/json" },
+      body: JSON.stringify({ text: texto, model_id: MODELO, voice_settings: { ...AJUSTES, speed: VELOCIDAD },
+                             ...(antes ? { previous_text: antes } : {}), ...(despues ? { next_text: despues } : {}) }) });
+    if (!r.ok) throw new Error(`ElevenLabs respondió ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const d = await r.json(), al = d.alignment || d.normalized_alignment;
+    const mp3 = Uint8Array.from(atob(d.audio_base64), c => c.charCodeAt(0));
+    const ini = al.character_start_times_seconds, fin = al.character_end_times_seconds, palabras = [];
+    let i = 0; for (const w of texto.split(" ")) { if (w) palabras.push({ palabra: w, inicio: ini[Math.min(i, ini.length - 1)] }); i += w.length + 1; }
+    p._voz = { texto: p.texto, mp3, json: { texto: p.texto, lectura: texto, voz: VOZ, velocidad: VELOCIDAD,
+               planos: [{ inicio: ini[0], fin: fin[fin.length - 1], palabras }] } };
+    marcarCambios(p.id); guardarBorrador(); sonar(mp3);
+  } catch (e) { alert("No se ha podido probar la voz: " + e.message); }
+  finally { boton.disabled = false; boton.textContent = "🔊 Probar voz"; }
+}
+async function probarVozGitHub(p, boton) {
+  if (LOCAL) { alert("En modo local no se puede pedir la voz a GitHub."); return; }
+  const [antes, despues] = vecinos(p.id), base = `fichas/${cfg.lugar}/largo/voz`;
+  const yaGrabada = async () => {   // ¿está ya en el repositorio la grabación de este texto?
+    try { const j = await leerJSON(`${base}/frases/${p.id}.json`); return j.texto === p.texto ? j : null; } catch { return null; }
+  };
+  boton.disabled = true;
+  try {
+    let json = await yaGrabada();
+    if (!json) {
+      boton.textContent = "Pidiendo la voz a GitHub…";
+      await escribir(`${base}/pruebas/${p.id}.json`, new TextEncoder().encode(JSON.stringify({ id: p.id, texto: p.texto, antes, despues }, null, 1)),
+                     `Editor: probar la voz de ${p.id}`);
+      const inicio = Date.now();
+      while (!(json = await yaGrabada())) {
+        const s = Math.round((Date.now() - inicio) / 1000);
+        if (s > 240) throw new Error("GitHub tarda demasiado. Mira la pestaña Actions del repositorio («Probar voz»).");
+        boton.textContent = `Grabando en GitHub… ${s} s`;
+        await new Promise(ok => setTimeout(ok, 5000));
+      }
+    }
+    const mp3 = new Uint8Array(await (await leerCrudo(`${base}/frases/${p.id}.mp3`)).arrayBuffer());
+    p._voz = { texto: p.texto, mp3, json, enRepositorio: true };
+    marcarCambios(p.id); guardarBorrador(); sonar(mp3);
+  } catch (e) { alert("No se ha podido probar la voz: " + e.message); }
+  finally { boton.disabled = false; boton.textContent = "🔊 Probar voz"; }
+}
+function sonar(mp3) {
+  const a = new Audio(URL.createObjectURL(new Blob([mp3], { type: "audio/mpeg" })));
+  a.playbackRate = TEMPO; a.preservesPitch = true; a.play();
+}
+
+// ---------- vista previa ----------
+const lienzo = document.getElementById("lienzo"), g = lienzo.getContext("2d");
+const W = lienzo.width, H = lienzo.height;
+let tActual = 0, reproduciendo = false, t0Reloj = 0, t0Video = 0, fuentesAudio = [];
+const suave = u => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, u)));
+function planoEn(t) { return linea.planos.find(p => t >= p.ini && t < p.fin) || linea.planos[linea.planos.length - 1]; }
+
+function ventanaImagen(img, mov, u) {   // misma idea que el zoompan del montador
+  let iw = img.naturalWidth, ih = img.naturalHeight, ox = 0, oy = 0;
+  if (iw / ih > 16 / 9) { const nw = ih * 16 / 9; ox = (iw - nw) / 2; iw = nw; } else { const nh = iw * 9 / 16; oy = (ih - nh) / 2; ih = nh; }
+  let z = 1 + 0.08 * u, fx = 0.5, fy = 0.5;
+  if (mov && mov.paneo) { z = 1.22; fx = mov.paneo[0] + (mov.paneo[1] - mov.paneo[0]) * u; }
+  else if (mov && mov.zoom) { z = mov.zoom[0] + (mov.zoom[1] - mov.zoom[0]) * u; }
+  else if (mov && mov.foco) { z = 1 + 0.22 * u; [fx, fy] = mov.foco; }
+  const sw = iw / z, sh = ih / z;
+  return [ox + (iw - sw) * fx, oy + (ih - sh) * fy, sw, sh];
+}
+function texto(t, x, y, tam, color, borde, alinear = "center") {
+  g.font = `900 ${tam}px "Liberation Sans", Arial, sans-serif`; g.textAlign = alinear; g.textBaseline = "middle";
+  g.lineJoin = "round"; g.lineWidth = tam / 6; g.strokeStyle = borde; g.strokeText(t, x, y); g.fillStyle = color; g.fillText(t, x, y);
+}
+async function dibujar(t) {
+  if (!linea) return;
+  tActual = t;
+  const lp = planoEn(t), p = editables()[lp.id] || lp, local = t - lp.ini, dur = lp.fin - lp.ini;
+  g.fillStyle = "#000"; g.fillRect(0, 0, W, H);
+  try {
+    if (lp.tipo === "imagen" && lp.fuente) {
+      const img = await imagen(lp.fuente); if (tActual !== t) return;
+      g.drawImage(img, ...ventanaImagen(img, p.mov, suave(local / dur)), 0, 0, W, H);
+    } else if (lp.tipo === "clip" && lp.fuente) {
+      const v = await video(lp.fuente); if (tActual !== t) return;
+      const ritmo = lp.fuente.includes("/marca/") ? 1 : 1.6;
+      const objetivo = Math.min(v.duration - 0.05, local * ritmo);
+      if (!reproduciendo || Math.abs(v.currentTime - objetivo) > 0.3) v.currentTime = objetivo;
+      g.drawImage(v, 0, 0, W, H);
+    }
+  } catch {}
+  const k = W / 1920;
+  if (lp.titulo) texto(lp.titulo, W / 2, H / 2, 64 * k, "#fff", "#1e1e1e");
+  if (p.rotulo && local < 4) {
+    g.font = `900 ${42 * k}px "Liberation Sans", Arial, sans-serif`;
+    const ancho = g.measureText(p.rotulo).width + 40 * k;
+    g.fillStyle = "#1e1e1e"; g.fillRect(W / 2 - ancho / 2, 30 * k, ancho, 70 * k);
+    g.fillStyle = "#ffc928"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(p.rotulo, W / 2, 65 * k);
+  }
+  if (p.aviso && cartelImg[p.aviso]) g.drawImage(cartelImg[p.aviso], 50 * k, 40 * k, 250 * k, 250 * 530 / 400 * k);
+  // subtítulos: con el texto editado, repartidos a lo largo del plano; si no, los del montaje
+  let sub = "";
+  if (editables()[lp.id] && planoOriginal(lp.id) && p.texto !== planoOriginal(lp.id).texto) {
+    const pal = p.texto.split(/\s+/), n = Math.max(1, Math.ceil(pal.length / 5)), i = Math.min(n - 1, Math.floor(local / dur * n));
+    sub = pal.slice(i * 5, i * 5 + 5).join(" ");
+  } else { for (const [a, s, b] of lp.subs) if (local >= a && local < b) sub = s; }
+  if (sub) texto(sub, W / 2, H - 70 * k, 52 * k, "#fff", "#1e1e1e");
+  document.getElementById("reloj").textContent = `${fmt(t)} / ${fmt(linea.total)}`;
+  document.getElementById("barra").value = t;
+  document.querySelectorAll(".plano.activo").forEach(e => e.classList.remove("activo"));
+  const tarjeta = document.getElementById("p_" + lp.id); if (tarjeta) tarjeta.classList.add("activo");
+}
+
+async function reproducir(desde) {
+  parar();
+  actx = actx || new AudioContext(); await actx.resume();
+  reproduciendo = true; document.getElementById("bPlay").textContent = "⏸";
+  t0Video = desde; t0Reloj = actx.currentTime + 0.15;
+  for (const a of linea.audio) {   // cada trozo de voz en su sitio (en la vista previa, el tempo cambia un poco el tono)
+    const dur = (a.hasta - a.desde) / a.tempo;
+    if (a.en + dur <= desde) continue;
+    buffer(a.archivo).then(buf => {
+      if (!reproduciendo) return;
+      const s = actx.createBufferSource(); s.buffer = buf; s.playbackRate.value = a.tempo; s.connect(actx.destination);
+      const salto = Math.max(0, desde - a.en);
+      const hasta = Math.min(a.hasta, buf.duration);
+      if (a.desde + salto * a.tempo >= hasta) return;
+      s.start(t0Reloj + Math.max(0, a.en - desde), a.desde + salto * a.tempo, hasta - a.desde - salto * a.tempo);
+      fuentesAudio.push(s);
+    }).catch(() => {});
+  }
+  const bucle = () => {
+    if (!reproduciendo) return;
+    const t = t0Video + Math.max(0, actx.currentTime - t0Reloj);
+    if (t >= linea.total) return parar();
+    dibujar(t); requestAnimationFrame(bucle);
+  };
+  bucle();
+}
+function parar() {
+  reproduciendo = false; document.getElementById("bPlay").textContent = "▶";
+  fuentesAudio.forEach(s => { try { s.stop(); } catch {} }); fuentesAudio = [];
+}
+
+// ---------- botones ----------
+document.getElementById("bPlay").onclick = () => reproduciendo ? parar() : reproducir(tActual);
+document.getElementById("barra").oninput = e => { const t = +e.target.value; if (reproduciendo) reproducir(t); else dibujar(t); };
+document.getElementById("bGuardar").onclick = guardar;
+document.getElementById("bRecargar").onclick = () => { parar(); cargar(); };
+document.getElementById("bConfig").onclick = () => {
+  const d = document.getElementById("dConfig");
+  ["Repo", "Rama", "Lugar", "Token", "Eleven"].forEach(k => document.getElementById("c" + k).value = cfg[k.toLowerCase()] || "");
+  d.showModal();
+  d.onclose = () => {
+    if (d.returnValue !== "ok") return;
+    ["Repo", "Rama", "Lugar", "Token", "Eleven"].forEach(k => cfg[k.toLowerCase()] = document.getElementById("c" + k).value.trim() || DEF[k.toLowerCase()]);
+    guardarConfig(cfg); cargar();
+  };
+};
+window.addEventListener("beforeunload", () => { clearTimeout(temporizadorBorrador); escribirBorrador(); });
+cargar();
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
