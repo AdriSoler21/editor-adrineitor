@@ -95,7 +95,7 @@
       GitHub → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token → Repository access: <i>Only select repositories</i> (este) → Permissions: <b>Contents: Read and write</b> y <b>Actions: Read-only</b>.
       El token se guarda solo en este navegador.</p>
     <label>Usuario / repositorio <input id="cRepo" placeholder="AdriSoler21/agente-creador-contenido"></label>
-    <label>Rama <input id="cRama" placeholder="claude/trusting-heisenberg-gjzzbe"></label>
+    <label>Rama <input id="cRama" placeholder="main"></label>
     <label>Lugar <input id="cLugar" placeholder="colindres"></label>
     <label>Token <input id="cToken" type="password" placeholder="github_pat_…"></label>
     <label>Clave de ElevenLabs (opcional: si la dejas vacía, «Probar voz» la hace GitHub con su secreto y tarda ~1 min; empieza por <code>sk_</code>) <input id="cEleven" type="password" placeholder="sk_…"></label>
@@ -111,9 +111,15 @@
 <script>
 "use strict";
 // ---------- configuración ----------
-const DEF = { repo: "AdriSoler21/agente-creador-contenido", rama: "claude/trusting-heisenberg-gjzzbe", lugar: "colindres", token: "", eleven: "" };
+const DEF = { repo: "AdriSoler21/agente-creador-contenido", rama: "main", lugar: "colindres", token: "", eleven: "" };
 const LOCAL = new URLSearchParams(location.search).has("local");   // pruebas: lee los archivos del propio repositorio servido en local
-function leerConfig() { try { return { ...DEF, ...JSON.parse(localStorage.getItem("editor_cfg") || "{}") }; } catch { return { ...DEF }; } }
+function leerConfig() {
+  let c;
+  try { c = { ...DEF, ...JSON.parse(localStorage.getItem("editor_cfg") || "{}") }; } catch { c = { ...DEF }; }
+  // la rama del vídeo largo se juntó con main el 9 nov 2026: quien la tenga guardada pasa a main solo
+  if (c.rama === "claude/trusting-heisenberg-gjzzbe") { c.rama = "main"; try { localStorage.setItem("editor_cfg", JSON.stringify(c)); } catch {} }
+  return c;
+}
 function guardarConfig(c) { try { localStorage.setItem("editor_cfg", JSON.stringify(c)); } catch {} }
 let cfg = leerConfig();
 
@@ -388,8 +394,8 @@ async function seguirMontaje(sha) {
 
 // ---------- probar voz (ElevenLabs, solo la frase) ----------
 // Mismos ajustes que maquina/voz/voz.py y maquina/montador/largo.py
-const VOZ = "HMCmDsbKeaSZp5LMOYKR", MODELO = "eleven_multilingual_v2", VELOCIDAD = 1.1, TEMPO = 1.07;
-const AJUSTES = { stability: 0.4, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true };
+const VOZ = "851ejYcv2BoNPjrkw93G", MODELO = "eleven_multilingual_v2", VELOCIDAD = 1.1, TEMPO = 1.0;  // Tony (9 nov 2026)
+const AJUSTES = { stability: 0.6, similarity_boost: 0.8, style: 0.1, use_speaker_boost: true };  // como maquina/voz/voz.py (9 nov 2026)
 const UNI = ["cero","uno","dos","tres","cuatro","cinco","seis","siete","ocho","nueve","diez","once","doce","trece","catorce","quince","dieciséis","diecisiete","dieciocho","diecinueve","veinte","veintiuno","veintidós","veintitrés","veinticuatro","veinticinco","veintiséis","veintisiete","veintiocho","veintinueve"];
 const DEC = {3:"treinta",4:"cuarenta",5:"cincuenta",6:"sesenta",7:"setenta",8:"ochenta",9:"noventa"};
 const CEN = {1:"ciento",2:"doscientos",3:"trescientos",4:"cuatrocientos",5:"quinientos",6:"seiscientos",7:"setecientos",8:"ochocientos",9:"novecientos"};
